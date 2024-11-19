@@ -52,29 +52,60 @@ export function Chat({
     },
     initialMessages,
     onResponse: (response) => {
-      response.text().then((text) => {
-        const chunks = text.split('\n\n');
-        for (const chunk of chunks) {
-          if (chunk.startsWith('data: ')) {
-            const data = chunk.replace('data: ', '');
-            if (data === '[DONE]') return;
-            
-            try {
-              const parsed = JSON.parse(data);
-              setStreamContent(parsed.content);
-              console.log('New chunk received:', parsed.content);
-            } catch (e) {
-              console.error('Failed to parse chunk:', e);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let lastContent = '';
+
+      async function readStream() {
+        if (!reader) return;
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.replace('data: ', '').trim();
+                if (data === '[DONE]') {
+                  setIsStreaming(false);
+                  return;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.completed) {
+                    console.log('Received final chat state');
+                    setIsStreaming(false);
+                    return;
+                  }
+                  
+                  const newContent = parsed.content.slice(lastContent.length);
+                  lastContent = parsed.content;
+                  setStreamContent(prev => prev + newContent);
+                } catch (e) {
+                  console.error('Failed to parse chunk:', e);
+                }
+              }
             }
           }
+        } catch (error) {
+          console.error('Error reading stream:', error);
+        } finally {
+          reader.releaseLock();
+          mutate('/api/history');
         }
-      });
+      }
+
+      readStream();
     },
     onFinish: () => {
-      console.log('Stream completed');
-      mutate('/api/history');
-      setStreamContent('');
+      console.log('Stream completed via onFinish');
       setIsStreaming(false);
+      mutate('/api/history');
     },
   });
 
