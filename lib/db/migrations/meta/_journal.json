@@ -1,26 +1,19 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
+  "version": "5",
+  "dialect": "pg",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1728598022383,
-      "tag": "0000_keen_devos",
+      "version": "5",
+      "when": 1710000000000,
+      "tag": "0003_reset_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
-      "version": "7",
-      "when": 1730207363999,
-      "tag": "0001_sparkling_blue_marvel",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1730725226313,
-      "tag": "0002_wandering_riptide",
+      "version": "5",
+      "when": 1710000000001,
+      "tag": "0004_add_default_user",
       "breakpoints": true
     }
   ]

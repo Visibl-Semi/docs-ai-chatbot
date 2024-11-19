@@ -7,7 +7,6 @@ import {
   uuid,
   text,
   primaryKey,
-  foreignKey,
   boolean,
 } from 'drizzle-orm/pg-core';
 
@@ -21,8 +20,10 @@ export type User = InferSelectModel<typeof user>;
 
 export const chat = pgTable('Chat', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
-  createdAt: timestamp('createdAt').notNull(),
   title: text('title').notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   userId: uuid('userId')
     .notNull()
     .references(() => user.id),
@@ -34,10 +35,12 @@ export const message = pgTable('Message', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   chatId: uuid('chatId')
     .notNull()
-    .references(() => chat.id),
+    .references(() => chat.id, { onDelete: 'cascade' }),
   role: varchar('role').notNull(),
   content: json('content').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export type Message = InferSelectModel<typeof message>;
@@ -47,17 +50,15 @@ export const vote = pgTable(
   {
     chatId: uuid('chatId')
       .notNull()
-      .references(() => chat.id),
+      .references(() => chat.id, { onDelete: 'cascade' }),
     messageId: uuid('messageId')
       .notNull()
-      .references(() => message.id),
+      .references(() => message.id, { onDelete: 'cascade' }),
     isUpvoted: boolean('isUpvoted').notNull(),
   },
-  (table) => {
-    return {
-      pk: primaryKey({ columns: [table.chatId, table.messageId] }),
-    };
-  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.chatId, table.messageId] }),
+  }),
 );
 
 export type Vote = InferSelectModel<typeof vote>;

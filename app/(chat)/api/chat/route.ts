@@ -55,12 +55,6 @@ export async function POST(request: Request) {
   }: { id: string; messages: Array<Message>; modelId: string } =
     await request.json();
 
-  const session = await auth();
-
-  if (!session || !session.user || !session.user.id) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
   const model = models.find((model) => model.id === modelId);
 
   if (!model) {
@@ -76,15 +70,18 @@ export async function POST(request: Request) {
 
   const chat = await getChatById({ id });
 
+  const defaultUserId = '00000000-0000-0000-0000-000000000000';
+
   if (!chat) {
     const title = await generateTitleFromUserMessage({ message: userMessage });
-    await saveChat({ id, userId: session.user.id, title });
+    await saveChat({ id, userId: defaultUserId, title });
   }
 
   await saveMessages({
-    messages: [
-      { ...userMessage, id: generateUUID(), createdAt: new Date(), chatId: id },
-    ],
+    messages: messages.map((message) => ({
+      ...message,
+      chatId: id,
+    })),
   });
 
   const streamingData = new StreamData();
@@ -327,35 +324,22 @@ export async function POST(request: Request) {
       },
     },
     onFinish: async ({ responseMessages }) => {
-      if (session.user?.id) {
-        try {
-          const responseMessagesWithoutIncompleteToolCalls =
-            sanitizeResponseMessages(responseMessages);
+      try {
+        const responseMessagesWithoutIncompleteToolCalls =
+          sanitizeResponseMessages(responseMessages);
 
+        if (responseMessagesWithoutIncompleteToolCalls.length > 0) {
           await saveMessages({
-            messages: responseMessagesWithoutIncompleteToolCalls.map(
-              (message) => {
-                const messageId = generateUUID();
-
-                if (message.role === 'assistant') {
-                  streamingData.appendMessageAnnotation({
-                    messageIdFromServer: messageId,
-                  });
-                }
-
-                return {
-                  id: messageId,
-                  chatId: id,
-                  role: message.role,
-                  content: message.content,
-                  createdAt: new Date(),
-                };
-              },
-            ),
+            messages: responseMessagesWithoutIncompleteToolCalls.map((message) => ({
+              ...message,
+              chatId: id,
+            })),
           });
-        } catch (error) {
-          console.error('Failed to save chat');
+        } else {
+          console.log('No valid messages to save after sanitization');
         }
+      } catch (error) {
+        console.error('Failed to save response messages:', error);
       }
 
       streamingData.close();

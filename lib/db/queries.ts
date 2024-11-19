@@ -4,6 +4,7 @@ import { genSaltSync, hashSync } from 'bcrypt-ts';
 import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import fs from 'fs/promises';
 
 import {
   user,
@@ -22,8 +23,37 @@ import {
 // https://authjs.dev/reference/adapter/drizzle
 
 // biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(`${process.env.POSTGRES_URL!}?sslmode=require`);
+const client = postgres(process.env.POSTGRES_URL ?? 'postgresql://localhost:5432/ai_chatbot_db', {
+  ssl: process.env.NODE_ENV === 'production',
+  max: 1
+});
+
 const db = drizzle(client);
+
+const sql = postgres(process.env.POSTGRES_URL ?? 'postgresql://localhost:5432/ai_chatbot_db', {
+  ssl: process.env.NODE_ENV === 'production',
+  max: 1,
+  onError: (err) => {
+    console.error('Database connection error:', err);
+  },
+});
+
+export async function testConnection() {
+  try {
+    await db.select().from(user);
+    console.log('Database connection successful');
+  } catch (err) {
+    console.error('Database connection error:', err);
+    // Create tables if they don't exist
+    try {
+      const schema = await fs.readFile('lib/db/schema.sql', 'utf-8');
+      await db.execute(sql.raw(schema));
+      console.log('Database schema created successfully');
+    } catch (schemaErr) {
+      console.error('Failed to create database schema:', schemaErr);
+    }
+  }
+}
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
@@ -52,14 +82,14 @@ export async function saveChat({
   title,
 }: {
   id: string;
-  userId: string;
+  userId?: string;
   title: string;
 }) {
   try {
     return await db.insert(chat).values({
       id,
       createdAt: new Date(),
-      userId,
+      userId: userId ?? 'anonymous',
       title,
     });
   } catch (error) {
@@ -103,9 +133,30 @@ export async function getChatById({ id }: { id: string }) {
   }
 }
 
-export async function saveMessages({ messages }: { messages: Array<Message> }) {
+export async function saveMessages({
+  messages,
+}: {
+  messages: Array<{
+    id: string;
+    chatId: string;
+    content: unknown;
+    role: string;
+  }>;
+}) {
   try {
-    return await db.insert(message).values(messages);
+    if (!messages || messages.length === 0) {
+      console.log('No messages to save');
+      return;
+    }
+
+    await db.insert(message).values(
+      messages.map((message) => ({
+        id: message.id,
+        chatId: message.chatId,
+        content: message.content as Json,
+        role: message.role,
+      })),
+    );
   } catch (error) {
     console.error('Failed to save messages in database', error);
     throw error;
@@ -138,31 +189,47 @@ export async function voteMessage({
     const [existingVote] = await db
       .select()
       .from(vote)
-      .where(and(eq(vote.messageId, messageId)));
+      .where(
+        and(
+          eq(vote.messageId, messageId),
+          eq(vote.chatId, chatId)
+        )
+      );
 
     if (existingVote) {
       return await db
         .update(vote)
         .set({ isUpvoted: type === 'up' })
-        .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
+        .where(
+          and(
+            eq(vote.messageId, messageId),
+            eq(vote.chatId, chatId)
+          )
+        );
     }
+
     return await db.insert(vote).values({
-      chatId,
       messageId,
+      chatId,
       isUpvoted: type === 'up',
     });
   } catch (error) {
-    console.error('Failed to upvote message in database', error);
+    console.error('Failed to vote message in database:', error);
     throw error;
   }
 }
 
 export async function getVotesByChatId({ id }: { id: string }) {
   try {
-    return await db.select().from(vote).where(eq(vote.chatId, id));
+    const votes = await db
+      .select()
+      .from(vote)
+      .where(eq(vote.chatId, id));
+    
+    return votes;
   } catch (error) {
-    console.error('Failed to get votes by chat id from database', error);
-    throw error;
+    console.error('Failed to get votes by chat id from database:', error);
+    return [];
   }
 }
 
