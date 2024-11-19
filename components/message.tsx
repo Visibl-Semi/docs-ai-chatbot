@@ -4,6 +4,7 @@ import type { Message } from 'ai';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import type { Dispatch, SetStateAction } from 'react';
+import { useEffect } from 'react';
 
 import type { Vote } from '@/lib/db/schema';
 
@@ -30,6 +31,12 @@ export const PreviewMessage = ({
   vote: Vote | undefined;
   isLoading: boolean;
 }) => {
+  useEffect(() => {
+    if (message.content) {
+      console.log('Message content updated:', message.content.slice(-20));
+    }
+  }, [message.content]);
+
   return (
     <motion.div
       className="w-full mx-auto max-w-3xl px-4 group/message"
@@ -51,7 +58,7 @@ export const PreviewMessage = ({
         <div className="flex flex-col gap-2 w-full">
           {message.content && (
             <div className="flex flex-col gap-4">
-              <Markdown>{message.content as string}</Markdown>
+              <Markdown key={message.content}>{message.content as string}</Markdown>
             </div>
           )}
 

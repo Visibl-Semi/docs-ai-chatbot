@@ -1,11 +1,21 @@
-import { openai } from '@ai-sdk/openai';
-import { experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
+import { Ollama } from 'ollama';
 
-import { customMiddleware } from './custom-middleware';
+export const ollamaClient = new Ollama({
+  host: process.env.OLLAMA_HOST || 'http://localhost:11434'
+});
 
-export const customModel = (apiIdentifier: string) => {
-  return wrapLanguageModel({
-    model: openai(apiIdentifier),
-    middleware: customMiddleware,
+export async function generateWithOllama({ 
+  model, 
+  messages, 
+  stream = false 
+}: { 
+  model: string;
+  messages: Array<{ role: string; content: string }>;
+  stream?: boolean;
+}) {
+  return ollamaClient.chat({
+    model,
+    messages,
+    stream
   });
-};
+}

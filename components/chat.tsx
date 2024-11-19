@@ -3,7 +3,7 @@
 import type { Attachment, Message } from 'ai';
 import { useChat } from 'ai/react';
 import { AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { useWindowSize } from 'usehooks-ts';
 
@@ -17,6 +17,7 @@ import { Block, type UIBlock } from './block';
 import { BlockStreamHandler } from './block-stream-handler';
 import { MultimodalInput } from './multimodal-input';
 import { Overview } from './overview';
+import { models } from '@/lib/ai/models';
 
 export function Chat({
   id,
@@ -29,6 +30,8 @@ export function Chat({
 }) {
   const { mutate } = useSWRConfig();
 
+  const [streamContent, setStreamContent] = useState('');
+
   const {
     messages,
     setMessages,
@@ -39,11 +42,39 @@ export function Chat({
     isLoading,
     stop,
     data: streamingData,
+    isStreaming: hookIsStreaming,
   } = useChat({
-    body: { id, modelId: selectedModelId },
+    api: '/api/chat',
+    id,
+    body: {
+      id,
+      model: models.find(m => m.id === selectedModelId)
+    },
     initialMessages,
+    onResponse: (response) => {
+      response.text().then((text) => {
+        const chunks = text.split('\n\n');
+        for (const chunk of chunks) {
+          if (chunk.startsWith('data: ')) {
+            const data = chunk.replace('data: ', '');
+            if (data === '[DONE]') return;
+            
+            try {
+              const parsed = JSON.parse(data);
+              setStreamContent(parsed.content);
+              console.log('New chunk received:', parsed.content);
+            } catch (e) {
+              console.error('Failed to parse chunk:', e);
+            }
+          }
+        }
+      });
+    },
     onFinish: () => {
+      console.log('Stream completed');
       mutate('/api/history');
+      setStreamContent('');
+      setIsStreaming(false);
     },
   });
 
@@ -74,6 +105,39 @@ export function Chat({
 
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
 
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const handleSubmitWithStreaming = async (e: React.FormEvent<HTMLFormElement>) => {
+    setIsStreaming(true);
+    setStreamContent('');
+    try {
+      await handleSubmit(e);
+    } catch (error) {
+      console.error('Error submitting chat:', error);
+      setIsStreaming(false);
+    }
+  };
+
+  const showLoading = isLoading || isStreaming || hookIsStreaming;
+
+  const displayMessages = useMemo(() => {
+    if (!streamContent || messages.length === 0) return messages;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role === 'user') {
+      return [...messages, {
+        id: 'streaming',
+        role: 'assistant',
+        content: streamContent,
+        createdAt: new Date()
+      }];
+    }
+    
+    return messages.map((msg, i) => 
+      i === messages.length - 1 ? { ...msg, content: streamContent } : msg
+    );
+  }, [messages, streamContent]);
+
   return (
     <>
       <div className="flex flex-col min-w-0 h-dvh bg-background">
@@ -84,14 +148,14 @@ export function Chat({
         >
           {messages.length === 0 && <Overview />}
 
-          {messages.map((message, index) => (
+          {displayMessages.map((message, index) => (
             <PreviewMessage
               key={message.id}
               chatId={id}
               message={message}
               block={block}
               setBlock={setBlock}
-              isLoading={isLoading && messages.length - 1 === index}
+              isLoading={showLoading && displayMessages.length - 1 === index}
               vote={
                 votes
                   ? votes.find((vote) => vote.messageId === message.id)
@@ -100,9 +164,9 @@ export function Chat({
             />
           ))}
 
-          {isLoading &&
-            messages.length > 0 &&
-            messages[messages.length - 1].role === 'user' && (
+          {showLoading &&
+            displayMessages.length > 0 &&
+            displayMessages[displayMessages.length - 1].role === 'user' && (
               <ThinkingMessage />
             )}
 
@@ -111,13 +175,13 @@ export function Chat({
             className="shrink-0 min-w-[24px] min-h-[24px]"
           />
         </div>
-        <form className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
+        <form onSubmit={handleSubmitWithStreaming} className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
           <MultimodalInput
             chatId={id}
             input={input}
             setInput={setInput}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
+            handleSubmit={handleSubmitWithStreaming}
+            isLoading={showLoading}
             stop={stop}
             attachments={attachments}
             setAttachments={setAttachments}
@@ -134,8 +198,8 @@ export function Chat({
             chatId={id}
             input={input}
             setInput={setInput}
-            handleSubmit={handleSubmit}
-            isLoading={isLoading}
+            handleSubmit={handleSubmitWithStreaming}
+            isLoading={showLoading}
             stop={stop}
             attachments={attachments}
             setAttachments={setAttachments}
