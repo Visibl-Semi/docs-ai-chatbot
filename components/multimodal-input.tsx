@@ -127,6 +127,7 @@ export function MultimodalInput({
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [mentionFilter, setMentionFilter] = useState('');
+  const [selectedMentions, setSelectedMentions] = useState<Set<string>>(new Set());
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value;
@@ -150,7 +151,12 @@ export function MultimodalInput({
       const lastAtIndex = value.lastIndexOf('@');
       if (lastAtIndex >= 0) {
         const filterText = value.slice(lastAtIndex + 1);
-        setMentionFilter(filterText);
+        if (filterText.includes(' ')) {
+          setShowMentionPopup(false);
+          setMentionFilter('');
+        } else {
+          setMentionFilter(filterText);
+        }
       } else {
         setShowMentionPopup(false);
         setMentionFilter('');
@@ -163,6 +169,7 @@ export function MultimodalInput({
     const lastAtIndex = currentInput.lastIndexOf('@');
     const newInput = currentInput.slice(0, lastAtIndex) + mention + ' ';
     setInput(newInput);
+    setSelectedMentions(prev => new Set([...prev, mention]));
     setShowMentionPopup(false);
   };
 
@@ -245,12 +252,12 @@ export function MultimodalInput({
   );
 
   const renderStyledInput = (text: string) => {
-    const parts = text.split(/(@[\w-]+)/).map((part, index) => {
-      if (part.startsWith('@')) {
+    const parts = text.split(/(@[\w.-]+(?:\s|$))/).map((part, index) => {
+      if (part.match(/@[\w.-]+(?:\s|$)/) && selectedMentions.has(part.trim())) {
         return (
           <span 
             key={index} 
-            className="bg-blue-500/10 text-blue-500 rounded px-1"
+            className="bg-blue-500/10 text-blue-500 rounded px-1 -mx-1"
           >
             {part}
           </span>
