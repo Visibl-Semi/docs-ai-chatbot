@@ -21,7 +21,7 @@ export const Overview = () => {
       transition={{ delay: 0.5 }}
     >
       <div className="rounded-xl p-6 flex flex-col gap-8 leading-relaxed text-center max-w-xl">
-        <p className="flex flex-row justify-center gap-4 items-center">
+        {/* <p className="flex flex-row justify-center gap-4 items-center">
           <Image 
             src={theme === 'dark' ? VisiblBlack : VisiblWhite}
             alt="Visibl Logo"
@@ -31,15 +31,14 @@ export const Overview = () => {
           
           <span>+</span>
           <MessageIcon size={32} />
-        </p>
-        <p className="text-2xl uppercase">
+        </p> */}
+        <p className="text-5xl uppercase">
           Visibl Docs Chat
         </p>
         <p>
-        Visibl Docs Chat is an AI chatbot interface designed for semiconductor design documentation. 
+          Visibl Docs Chat is an AI chatbot interface designed for <u className="font-semibold">semiconductor design</u> documentation. 
 
-        It seamlessly integrates locally hosted models to prioritize maximum security and data privacy, making it ideal for sensitive workflows.
-        
+          It seamlessly integrates <u className="font-semibold">locally hosted models</u> to prioritize <u className="font-semibold">maximum security and data privacy</u>, making it ideal for sensitive workflows.
         </p>
       </div>
     </motion.div>

@@ -30,14 +30,24 @@ import { Textarea } from './ui/textarea';
 
 const suggestedActions = [
   {
-    title: 'What is the weather',
-    label: 'in San Francisco?',
-    action: 'What is the weather in San Francisco?',
+    title: 'Show a block diagram',
+    label: 'for this design.',
+    action: 'Generate and display a block diagram for the current semiconductor design.',
   },
   {
-    title: 'Help me draft an essay',
-    label: 'about Silicon Valley',
-    action: 'Help me draft a short essay about Silicon Valley',
+    title: 'What does this module do?',
+    label: 'in the current design?',
+    action: 'Explain the functionality of this module in the current semiconductor design.',
+  },
+  {
+    title: 'Explain timing constraints',
+    label: 'for this design.',
+    action: 'Explain the timing constraints and how they impact the current semiconductor design.',
+  },
+  {
+    title: 'Compare parameters',
+    label: 'across design files.',
+    action: 'Create a comparison table of key parameters and configurations across different design files.',
   },
 ];
 
