@@ -27,6 +27,7 @@ import { ArrowUpIcon, PaperclipIcon, StopIcon } from './icons';
 import { PreviewAttachment } from './preview-attachment';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { MentionPopup } from './mention-popup';
 
 const suggestedActions = [
   {
@@ -123,9 +124,46 @@ export function MultimodalInput({
     setLocalStorageInput(input);
   }, [input, setLocalStorageInput]);
 
+  const [showMentionPopup, setShowMentionPopup] = useState(false);
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [mentionFilter, setMentionFilter] = useState('');
+
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(event.target.value);
+    const value = event.target.value;
+    setInput(value);
     adjustHeight();
+
+    if (value.slice(-1) === '@') {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        const caretCoords = getCaretCoordinates(textarea, textarea.selectionEnd);
+        const rect = textarea.getBoundingClientRect();
+        
+        setMentionPosition({
+          top: rect.top - caretCoords.top + 24,
+          left: rect.left + caretCoords.left - 620,
+        });
+        setShowMentionPopup(true);
+        setMentionFilter('');
+      }
+    } else if (showMentionPopup) {
+      const lastAtIndex = value.lastIndexOf('@');
+      if (lastAtIndex >= 0) {
+        const filterText = value.slice(lastAtIndex + 1);
+        setMentionFilter(filterText);
+      } else {
+        setShowMentionPopup(false);
+        setMentionFilter('');
+      }
+    }
+  };
+
+  const handleMentionSelect = (mention: string) => {
+    const currentInput = input;
+    const lastAtIndex = currentInput.lastIndexOf('@');
+    const newInput = currentInput.slice(0, lastAtIndex) + mention + ' ';
+    setInput(newInput);
+    setShowMentionPopup(false);
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,8 +244,32 @@ export function MultimodalInput({
     [setAttachments],
   );
 
+  const renderStyledInput = (text: string) => {
+    const parts = text.split(/(@[\w-]+)/).map((part, index) => {
+      if (part.startsWith('@')) {
+        return (
+          <span 
+            key={index} 
+            className="bg-blue-500/10 text-blue-500 rounded px-1"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+    return parts;
+  };
+
   return (
     <div className="relative w-full flex flex-col gap-4">
+      <MentionPopup
+        isVisible={showMentionPopup}
+        position={mentionPosition}
+        onSelect={handleMentionSelect}
+        searchTerm={mentionFilter}
+      />
+
       {messages.length === 0 &&
         attachments.length === 0 &&
         uploadQueue.length === 0 && (
@@ -272,29 +334,47 @@ export function MultimodalInput({
         </div>
       )}
 
-      <Textarea
-        ref={textareaRef}
-        placeholder="Send a message..."
-        value={input}
-        onChange={handleInput}
-        className={cx(
-          'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-xl text-base bg-muted',
-          className,
-        )}
-        rows={3}
-        autoFocus
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
+      <div className="relative">
+        <div 
+          className={cx(
+            'absolute top-0 left-0 w-full p-3 pointer-events-none',
+            'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden'
+          )}
+        >
+          {renderStyledInput(input)}
+        </div>
+        <Textarea
+          ref={textareaRef}
+          placeholder="Send a message..."
+          value={input}
+          onChange={handleInput}
+          className={cx(
+            'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-xl text-base bg-muted',
+            'text-transparent caret-foreground',
+            className,
+          )}
+          rows={3}
+          autoFocus
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              if (showMentionPopup) {
+                event.preventDefault();
+                return; // Let the MentionPopup handle the Enter key
+              }
+              
+              if (!event.shiftKey) {
+                event.preventDefault();
 
-            if (isLoading) {
-              toast.error('Please wait for the model to finish its response!');
-            } else {
-              submitForm();
+                if (isLoading) {
+                  toast.error('Please wait for the model to finish its response!');
+                } else {
+                  submitForm();
+                }
+              }
             }
-          }
-        }}
-      />
+          }}
+        />
+      </div>
 
       {isLoading ? (
         <Button
@@ -333,4 +413,33 @@ export function MultimodalInput({
       </Button>
     </div>
   );
+}
+
+function getCaretCoordinates(element: HTMLTextAreaElement, position: number) {
+  const { offsetLeft: elementLeft, offsetTop: elementTop } = element;
+  const div = document.createElement('div');
+  const styles = getComputedStyle(element);
+  const properties = [
+    'boxSizing', 'width', 'height', 'padding', 'border', 'lineHeight',
+    'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing'
+  ];
+
+  properties.forEach(prop => {
+    div.style[prop as any] = styles[prop];
+  });
+
+  div.textContent = element.value.substring(0, position);
+  
+  const span = document.createElement('span');
+  span.textContent = element.value.substring(position) || '.';
+  div.appendChild(span);
+  
+  document.body.appendChild(div);
+  const { offsetLeft: spanLeft, offsetTop: spanTop } = span;
+  document.body.removeChild(div);
+
+  return {
+    left: spanLeft + elementLeft,
+    top: spanTop + elementTop
+  };
 }
